@@ -1,0 +1,130 @@
+import { settings } from '../stores/settings.svelte';
+
+class SidecarService {
+    private ws: WebSocket | null = null;
+    private isConnected = false;
+    private queue: any[] = [];
+
+    constructor() {
+        this.connect();
+    }
+
+    private listeners: ((type: string, payload: any) => void)[] = [];
+
+    // Reactive state for the actual WhatsApp connection status
+    isWhatsAppReady = $state(false);
+    availableGroups = $state<{ id: string, name: string }[]>([]);
+    isFetchingGroups = $state(false);
+
+    onMessage(callback: (type: string, payload: any) => void) {
+        this.listeners.push(callback);
+    }
+
+    private notifyListeners(type: string, payload: any) {
+        if (type === 'READY') this.isWhatsAppReady = true;
+        if (type === 'DISCONNECTED') {
+            this.isWhatsAppReady = false;
+            this.availableGroups = [];
+            this.isFetchingGroups = false;
+        }
+        if (type === 'QR') {
+            this.isWhatsAppReady = false;
+            this.isFetchingGroups = false;
+        }
+        if (type === 'GROUPS') {
+            this.availableGroups = payload;
+            this.isFetchingGroups = false;
+        }
+        if (type === 'FETCHING_GROUPS') {
+            this.isFetchingGroups = payload;
+        }
+
+        this.listeners.forEach(cb => cb(type, payload));
+    }
+
+    connect() {
+        try {
+            this.ws = new WebSocket('ws://localhost:3001');
+
+            this.ws.onopen = () => {
+                console.log('Connected to Sidecar');
+                this.isConnected = true;
+                this.flushQueue();
+                this.sendInit();
+            };
+
+            this.ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    this.notifyListeners(data.type, data.payload);
+                } catch (e) {
+                    console.error('Failed to parse message from sidecar', e);
+                }
+            };
+
+            this.ws.onclose = () => {
+                console.log('Sidecar disconnected, retrying in 5s...');
+                this.isConnected = false;
+                setTimeout(() => this.connect(), 5000);
+            };
+
+            this.ws.onerror = (err) => {
+                console.error('Sidecar error', err);
+            };
+        } catch (e) {
+            console.error('Failed to connect', e);
+        }
+    }
+
+    sendInit() {
+        this.send({ type: 'INIT' });
+    }
+
+    send(data: any) {
+        if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify(data));
+        } else {
+            this.queue.push(data);
+        }
+    }
+
+    refreshGroups() {
+        this.send({ type: 'REFRESH_GROUPS' });
+    }
+
+    logout() {
+        this.send({ type: 'LOGOUT' });
+    }
+
+    flushQueue() {
+        while (this.queue.length > 0) {
+            const data = this.queue.shift();
+            this.send(data);
+        }
+    }
+
+    async sendToWhatsApp(message: string) {
+        if (!settings.whatsappNumber && !settings.targetGroup) {
+            console.warn('No target configured for WhatsApp');
+            return;
+        }
+
+        const target = settings.targetType === 'group' ? settings.targetGroup : settings.whatsappNumber;
+
+        if (!target) {
+            console.warn('Target is empty');
+            return;
+        }
+
+        this.send({
+            type: 'SEND_MESSAGE',
+            payload: {
+                targetType: settings.targetType,
+                target: target,
+                message: message
+            }
+        });
+    }
+}
+
+export const sidecar = new SidecarService();

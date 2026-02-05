@@ -1,0 +1,12 @@
+{
+    "name": "whatsapp-sidecar",
+    "version": "1.0.0",
+    "description": "Sidecar for WhatsApp integration",
+    "main": "index.js",
+    "type": "commonjs",
+    "dependencies": {
+        "whatsapp-web.js": "^1.23.0",
+        "qrcode-terminal": "^0.12.0",
+        "ws": "^8.16.0"
+    }
+}
