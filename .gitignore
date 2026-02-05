@@ -6,7 +6,6 @@ dist
 # Tauri
 src-tauri/target/
 src-tauri/gen/schemas/
-src-tauri/icons/icon.ico
 
 # OS
 .DS_Store
