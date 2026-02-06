@@ -6,7 +6,6 @@
 
   let newNumber = $state("");
   let qrCode = $state("");
-  let isReady = $state(false);
   let isLoggingOut = $state(false);
   let isEditingTemplates = $state(false);
 
@@ -15,14 +14,12 @@
       if (type === "QR") {
         try {
           qrCode = await QRCode.toDataURL(payload);
-          isReady = false;
           isLoggingOut = false;
         } catch (e) {
           console.error("QR Gen Failed", e);
         }
       }
       if (type === "READY") {
-        isReady = true;
         qrCode = "";
         isLoggingOut = false;
       }
@@ -30,7 +27,6 @@
         isLoggingOut = true;
       }
       if (type === "DISCONNECTED") {
-        isReady = false;
         qrCode = "";
         isLoggingOut = false;
         // Auto-restart auth flow to show QR again
@@ -75,7 +71,7 @@
           WhatsApp Connection
         </h3>
 
-        {#if !isReady && qrCode}
+        {#if !sidecar.isWhatsAppReady && qrCode}
           <div
             class="flex flex-col items-center justify-center p-4 bg-white rounded-lg border border-gray-200"
           >
@@ -87,14 +83,19 @@
               Open WhatsApp > Settings > Linked Devices
             </p>
           </div>
-        {:else if isReady}
+        {:else if sidecar.isWhatsAppReady}
           <div
             class="flex items-center gap-3 p-4 bg-green-50 rounded-lg border border-green-200 text-green-700"
           >
             <span class="material-symbols-outlined">check_circle</span>
             <span class="font-medium">WhatsApp is connected and ready!</span>
             <button
-              onclick={() => sidecar.logout()}
+              onclick={() => {
+                if (sidecar.isConnected) {
+                  isLoggingOut = true;
+                  sidecar.logout();
+                }
+              }}
               disabled={isLoggingOut}
               class="ml-auto px-3 py-1 bg-white border border-red-200 text-red-600 rounded-lg text-xs font-bold uppercase tracking-wider hover:bg-red-50 transition-colors flex items-center gap-2 disabled:opacity-50"
             >
@@ -118,6 +119,19 @@
               <span class="text-xs"
                 >Ensure Auto-start is ON and wait a moment</span
               >
+              <div
+                class="mt-4 p-2 bg-gray-100 rounded text-[10px] text-left w-full overflow-auto max-h-24 font-mono"
+              >
+                <p>
+                  Status: {sidecar.isConnected ? "Connected" : "Disconnected"}
+                </p>
+                <p>Ready: {sidecar.isWhatsAppReady}</p>
+                <p>Last Event: {sidecar.lastEvent || "None"}</p>
+                <button
+                  class="mt-2 text-blue-500 underline"
+                  onclick={() => sidecar.connect()}>Force Connect</button
+                >
+              </div>
             </div>
           </div>
         {/if}

@@ -6,7 +6,7 @@ export interface AppSettings {
 
 export class SettingsStore {
     whatsappNumber = $state<string | null>(null);
-    autoStart = $state(false);
+    autoStart = $state(true);
     userName = $state<string | null>('My Name');
     targetType = $state<'self' | 'group'>('self');
     targetGroup = $state<string | null>(null);

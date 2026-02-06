@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod commands;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -30,14 +32,19 @@ fn main() {
                 .build(),
         )
         .setup(|app| {
+            println!("App setup starting...");
             let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let show_i = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
-
-            let _tray = TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
+            let mut tray_builder = TrayIconBuilder::<tauri::Wry>::new()
                 .menu(&menu)
-                .show_menu_on_left_click(false)
+                .show_menu_on_left_click(false);
+
+            if let Some(icon) = app.default_window_icon() {
+                tray_builder = tray_builder.icon(icon.clone());
+            }
+
+            if let Err(e) = tray_builder
                 .on_menu_event(|app: &tauri::AppHandle, event| match event.id.as_ref() {
                     "quit" => {
                         app.exit(0);
@@ -64,7 +71,27 @@ fn main() {
                     }
                     _ => {}
                 })
-                .build(app)?;
+                .build(app)
+            {
+                eprintln!("Failed to build tray icon: {}", e);
+            }
+
+            println!("Tray setup completed.");
+
+            if let Some(window) = app.get_webview_window("main") {
+                println!("Main window found. Forcing show...");
+                let _ = window.show();
+                let _ = window.set_focus();
+
+                // #[cfg(debug_assertions)]
+                // {
+                //     window.open_devtools();
+                // }
+            } else {
+                println!("Main window NOT found during setup.");
+            }
+
+            println!("App setup completed.");
 
             Ok(())
         })

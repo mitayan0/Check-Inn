@@ -1,6 +1,6 @@
 {
     "name": "check-inn-light",
-    "version": "0.1.0",
+    "version": "0.1.3",
     "private": true,
     "type": "module",
     "scripts": {
@@ -8,6 +8,7 @@
         "build": "vite build",
         "preview": "vite preview",
         "check": "svelte-check --tsconfig ./tsconfig.json",
+        "postinstall": "node scripts/download_node.js",
         "tauri": "tauri"
     },
     "dependencies": {

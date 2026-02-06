@@ -1,7 +1,7 @@
 {
     "$schema": "https://schema.tauri.app/config/2",
     "productName": "Check Inn",
-    "version": "0.1.0",
+    "version": "0.1.3",
     "identifier": "com.checkinn.light",
     "build": {
         "beforeDevCommand": "npm run dev",
@@ -12,6 +12,7 @@
     "app": {
         "windows": [
             {
+                "label": "main",
                 "title": "Check Inn",
                 "width": 1200,
                 "height": 800,
@@ -33,6 +34,9 @@
             "icons/128x128@2x.png",
             "icons/icon.icns",
             "icons/icon.ico"
+        ],
+        "resources": [
+            "../sidecar"
         ]
     }
 }

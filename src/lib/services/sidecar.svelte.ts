@@ -2,7 +2,6 @@ import { settings } from '../stores/settings.svelte';
 
 class SidecarService {
     private ws: WebSocket | null = null;
-    private isConnected = false;
     private queue: any[] = [];
 
     constructor() {
@@ -15,12 +14,15 @@ class SidecarService {
     isWhatsAppReady = $state(false);
     availableGroups = $state<{ id: string, name: string }[]>([]);
     isFetchingGroups = $state(false);
+    isConnected = $state(false);
+    lastEvent = $state("");
 
     onMessage(callback: (type: string, payload: any) => void) {
         this.listeners.push(callback);
     }
 
     private notifyListeners(type: string, payload: any) {
+        this.lastEvent = type;
         if (type === 'READY') this.isWhatsAppReady = true;
         if (type === 'DISCONNECTED') {
             this.isWhatsAppReady = false;
@@ -44,6 +46,9 @@ class SidecarService {
 
     connect() {
         try {
+            if (this.ws) {
+                this.ws.close();
+            }
             this.ws = new WebSocket('ws://localhost:3001');
 
             this.ws.onopen = () => {
@@ -70,9 +75,11 @@ class SidecarService {
 
             this.ws.onerror = (err) => {
                 console.error('Sidecar error', err);
+                this.isConnected = false;
             };
         } catch (e) {
             console.error('Failed to connect', e);
+            this.isConnected = false;
         }
     }
 
