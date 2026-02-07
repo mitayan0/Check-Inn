@@ -1,12 +1,13 @@
 <script>
     import { session } from "../lib/stores/session.svelte";
-    import { onMount } from "svelte";
+    import { onMount, tick } from "svelte";
     import {
         Chart as ChartJS,
         Title,
         Tooltip,
         Legend,
         BarElement,
+        BarController,
         CategoryScale,
         LinearScale,
     } from "chart.js";
@@ -16,6 +17,7 @@
         Tooltip,
         Legend,
         BarElement,
+        BarController,
         CategoryScale,
         LinearScale,
     );
@@ -110,6 +112,7 @@
         }
 
         isLoading = false;
+        await tick(); // Ensure canvas is rendered
 
         // Destroy previous instance
         if (chartInstance) chartInstance.destroy();

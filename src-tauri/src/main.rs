@@ -32,7 +32,6 @@ fn main() {
                 .build(),
         )
         .setup(|app| {
-            println!("App setup starting...");
             let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let show_i = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
@@ -75,23 +74,6 @@ fn main() {
             {
                 eprintln!("Failed to build tray icon: {}", e);
             }
-
-            println!("Tray setup completed.");
-
-            if let Some(window) = app.get_webview_window("main") {
-                println!("Main window found. Forcing show...");
-                let _ = window.show();
-                let _ = window.set_focus();
-
-                // #[cfg(debug_assertions)]
-                // {
-                //     window.open_devtools();
-                // }
-            } else {
-                println!("Main window NOT found during setup.");
-            }
-
-            println!("App setup completed.");
 
             Ok(())
         })

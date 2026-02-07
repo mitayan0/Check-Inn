@@ -1,6 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import QRCode from "qrcode"; // QR Code generation library
+  import { invoke } from "@tauri-apps/api/core";
   import { settings } from "../lib/stores/settings.svelte";
   import { sidecar } from "../lib/services/sidecar.svelte";
 
@@ -129,7 +130,10 @@
                 <p>Last Event: {sidecar.lastEvent || "None"}</p>
                 <button
                   class="mt-2 text-blue-500 underline"
-                  onclick={() => sidecar.connect()}>Force Connect</button
+                  onclick={async () => {
+                    await invoke("start_sidecar");
+                    sidecar.connect();
+                  }}>Force Connect</button
                 >
               </div>
             </div>

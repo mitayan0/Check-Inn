@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import { settings } from '../stores/settings.svelte';
 
 class SidecarService {
@@ -70,6 +71,12 @@ class SidecarService {
             this.ws.onclose = () => {
                 console.log('Sidecar disconnected, retrying in 5s...');
                 this.isConnected = false;
+
+                // If auto-start is on, try to re-trigger the sidecar process
+                if (settings.autoStart) {
+                    invoke('start_sidecar').catch(console.error);
+                }
+
                 setTimeout(() => this.connect(), 5000);
             };
 
@@ -80,6 +87,10 @@ class SidecarService {
         } catch (e) {
             console.error('Failed to connect', e);
             this.isConnected = false;
+
+            if (settings.autoStart) {
+                invoke('start_sidecar').catch(console.error);
+            }
         }
     }
 

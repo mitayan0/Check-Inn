@@ -27,7 +27,7 @@ export class SettingsStore {
             try {
                 const data = JSON.parse(stored);
                 this.whatsappNumber = data.whatsappNumber ?? null;
-                this.autoStart = data.autoStart ?? false;
+                this.autoStart = data.autoStart ?? true;
                 this.userName = data.userName ?? null;
                 this.targetType = data.targetType ?? 'self';
                 this.targetGroup = data.targetGroup ?? null;
