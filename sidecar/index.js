@@ -474,8 +474,34 @@ function initWhatsApp(ws) {
             broadcast({ type: 'DISCONNECTED' });
         });
 
-        client.initialize().catch(err => {
+        client.initialize().catch(async err => {
             logError('Client initialization failed:', err);
+            // Handle specific "browser already running" error
+            if (err.message && err.message.includes('browser is already running')) {
+                log('Detected stuck browser process. Attempting cleanup and retry...');
+                try {
+                    const { execSync } = require('child_process');
+                    if (process.platform === 'win32') {
+                        execSync('taskkill /F /IM chrome.exe /FI "WINDOWTITLE eq about:blank" 2>nul', { stdio: 'ignore' });
+                    }
+                    // Wait a bit
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    // Retry initialization once
+                    // We need to re-create the client or just re-call initialize? 
+                    // Usually initialize() can't be called twice on same instance if failed partially?
+                    // Safer to destroy and restart? 
+                    // But here we are inside initWhatsApp.
+                    // Valid retry strategy:
+                    if (client) {
+                        client.destroy().catch(() => { });
+                        client = null;
+                    }
+                    // Recursive call to init (will create new client)
+                    setTimeout(() => initWhatsApp(ws), 1000);
+                } catch (retryErr) {
+                    logError('Retry failed:', retryErr);
+                }
+            }
         });
     } catch (e) {
         logError('Failed to create/init client:', e);
@@ -780,6 +806,7 @@ async function fetchAndAnalyzeMessages(groupId, fromDateStr, toDateStr) {
     // State Machine Storage
     const myPushName = client.info.pushname || 'Me';
     const myId = client.info.wid._serialized;
+    const bufferDate = new Date(fromDate.getTime() - 172800000); // 48 hours buffer
 
     // We only track the single user (the connected account)
     const activeUser = {
@@ -797,7 +824,6 @@ async function fetchAndAnalyzeMessages(groupId, fromDateStr, toDateStr) {
     const REGEX_TASKS_SIMPLE = /=>\s*(.+)/g;
 
     let processedCount = 0;
-    const bufferDate = new Date(fromDate.getTime() - 172800000); // 48 hours buffer
 
     // Helper: Cap session at 6 AM next day
     function capSessionAt6AM(session, context = "") {

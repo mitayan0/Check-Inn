@@ -1,6 +1,6 @@
 {
-    "name": "check-inn-light",
-    "version": "0.1.4",
+    "name": "check-inn",
+    "version": "0.1.5",
     "private": true,
     "type": "module",
     "scripts": {

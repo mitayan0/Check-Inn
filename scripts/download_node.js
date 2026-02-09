@@ -10,6 +10,11 @@ const __dirname = path.dirname(__filename);
 const url = "https://nodejs.org/dist/v20.11.0/win-x64/node.exe";
 const dest = path.join(__dirname, '../sidecar/node.exe');
 
+if (fs.existsSync(dest)) {
+  console.log(`Node.exe already exists at ${dest}. Skipping download.`);
+  process.exit(0);
+}
+
 console.log(`Downloading ${url} to ${dest}...`);
 
 const file = fs.createWriteStream(dest);
@@ -21,6 +26,13 @@ https.get(url, function (response) {
     });
   });
 }).on('error', function (err) {
-  fs.unlink(dest);
+  if (fs.existsSync(dest)) {
+    try {
+      fs.unlinkSync(dest);
+    } catch (e) {
+      // Ignore error if file is busy
+    }
+  }
   console.error("Error downloading:", err.message);
+  process.exit(1);
 });
