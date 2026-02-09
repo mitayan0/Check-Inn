@@ -73,6 +73,35 @@ ${formatList(blockers, "None")}`;
     });
     // Clear fields optionally? Keep them for reference? Let's keep them.
   }
+
+  // Live Timer
+  let elapsedTime = $state("00:00:00");
+  let timerInterval: any;
+
+  function updateTimer() {
+    if (session.status === "checked_in" && session.startTime) {
+      const now = new Date();
+      const diff = now.getTime() - session.startTime.getTime();
+
+      // Calculate HH:MM:SS
+      const totalSeconds = Math.floor(diff / 1000);
+      const h = Math.floor(totalSeconds / 3600);
+      const m = Math.floor((totalSeconds % 3600) / 60);
+      const s = totalSeconds % 60;
+
+      elapsedTime = `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    } else if (session.status === "break" && session.startTime) {
+      // Show static last active time or current "on break" status
+    } else {
+      elapsedTime = "00:00:00";
+    }
+  }
+
+  onMount(() => {
+    updateTimer();
+    timerInterval = setInterval(updateTimer, 1000);
+    return () => clearInterval(timerInterval);
+  });
 </script>
 
 <div class="grid gap-6">
@@ -94,15 +123,27 @@ ${formatList(blockers, "None")}`;
       >
         Current Status
       </div>
-      <div class="text-3xl font-normal capitalize flex items-center gap-2">
-        <span
-          class="w-3 h-3 rounded-full {session.status === 'checked_in'
-            ? 'bg-green-500'
-            : session.status === 'break'
-              ? 'bg-yellow-500'
-              : 'bg-gray-400'}"
-        ></span>
-        {session.status.replace("_", " ")}
+      <div
+        class="text-3xl font-normal capitalize flex items-center justify-between"
+      >
+        <div class="flex items-center gap-2">
+          <span
+            class="w-3 h-3 rounded-full {session.status === 'checked_in'
+              ? 'bg-green-500'
+              : session.status === 'break'
+                ? 'bg-yellow-500'
+                : 'bg-gray-400'}"
+          ></span>
+          {session.status.replace("_", " ")}
+        </div>
+
+        {#if session.status === "checked_in"}
+          <div
+            class="font-mono text-2xl text-primary-600 bg-primary/5 px-4 py-1 rounded-2xl border border-primary/10"
+          >
+            {elapsedTime}
+          </div>
+        {/if}
       </div>
     </div>
 

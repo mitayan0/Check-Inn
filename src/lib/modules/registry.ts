@@ -3,6 +3,7 @@ import Dashboard from '../../routes/Dashboard.svelte';
 import History from '../../routes/History.svelte';
 import Settings from '../../routes/Settings.svelte';
 import Stats from '../../routes/Stats.svelte';
+import Analyzer from '../../routes/Analyzer.svelte';
 
 export interface Module {
     id: string;
@@ -22,17 +23,24 @@ const modules: Module[] = [
     },
     {
         id: 'stats',
-        name: 'Stats',
-        icon: 'bar_chart',
+        name: 'Insights',
+        icon: 'insights',
         component: Stats,
         order: 2
+    },
+    {
+        id: 'analyzer',
+        name: 'Analyzer',
+        icon: 'query_stats',
+        component: Analyzer,
+        order: 3
     },
     {
         id: 'history',
         name: 'History',
         icon: 'calendar_month',
         component: History,
-        order: 3
+        order: 4
     },
     {
         id: 'settings',

@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { onMount } from "svelte";
   import QRCode from "qrcode"; // QR Code generation library
   import { invoke } from "@tauri-apps/api/core";
@@ -37,6 +37,18 @@
     // Trigger a re-init to prompt for QR if needed
     sidecar.sendInit();
   });
+
+  function handleAnalyze() {
+    if (!selectedGroup || !fromDate || !toDate) {
+      return;
+    }
+    sidecar.analyzeWorkHours(selectedGroup, fromDate, toDate);
+  }
+
+  function handleProviderChange(event) {
+    const target = event.target;
+    settings.setLlmProvider(target.value);
+  }
 
   function handleAdd() {
     if (newNumber.trim()) {
@@ -116,10 +128,7 @@
               <span class="material-symbols-outlined text-3xl"
                 >qr_code_scanner</span
               >
-              <span class="text-sm">Waiting for QR Code...</span>
-              <span class="text-xs"
-                >Ensure Auto-start is ON and wait a moment</span
-              >
+              <span class="text-xs">Connecting to WhatsApp service...</span>
               <div
                 class="mt-4 p-2 bg-gray-100 rounded text-[10px] text-left w-full overflow-auto max-h-24 font-mono"
               >
@@ -346,6 +355,113 @@
       </div>
 
       <div class="p-4 bg-gray-50 rounded-xl border border-gray-100">
+        <div class="flex items-center gap-3 mb-4">
+          <span class="material-symbols-outlined text-primary"
+            >auto_awesome</span
+          >
+          <h3
+            class="text-sm font-medium text-gray-700 uppercase tracking-wider"
+          >
+            AI Configuration
+          </h3>
+        </div>
+
+        <div class="space-y-6">
+          <!-- Provider Selection Dropdown -->
+          <div>
+            <label
+              for="llmProvider"
+              class="block text-xs font-bold text-gray-400 uppercase mb-2 px-1"
+              >Active AI Provider</label
+            >
+            <div class="relative">
+              <select
+                id="llmProvider"
+                value={settings.llmProvider}
+                onchange={handleProviderChange}
+                class="w-full pl-4 pr-10 h-10 rounded-lg border border-gray-300 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary appearance-none bg-white text-sm"
+              >
+                <option value="none">Disabled</option>
+                <option value="gemini">Google Gemini</option>
+                <option value="groq">Groq AI</option>
+                <option value="openrouter">OpenRouter (All Models)</option>
+              </select>
+              <span
+                class="material-symbols-outlined absolute right-3 top-2.5 text-gray-400 pointer-events-none"
+              >
+                expand_more
+              </span>
+            </div>
+          </div>
+
+          <!-- API Key Management Section -->
+          <div class="bg-white p-4 rounded-xl border border-gray-100 space-y-4">
+            <h4 class="text-xs font-bold text-gray-400 uppercase px-1">
+              Service API Keys
+            </h4>
+
+            <div class="space-y-4">
+              <!-- Gemini Key -->
+              <div>
+                <div class="flex items-center justify-between mb-1 ml-1">
+                  <label
+                    for="geminiKey"
+                    class="text-[11px] font-medium text-gray-600"
+                    >Google Gemini</label
+                  >
+                  <span class="text-[10px] text-gray-400 italic"
+                    >Optional (uses backend default if blank)</span
+                  >
+                </div>
+                <input
+                  type="password"
+                  id="geminiKey"
+                  bind:value={settings.geminiKey}
+                  onchange={() => settings.save()}
+                  placeholder="Enter Gemini API Key"
+                  class="w-full px-4 h-9 rounded-lg border border-gray-200 focus:outline-none focus:border-primary text-sm bg-gray-50/50"
+                />
+              </div>
+
+              <!-- Groq Key -->
+              <div>
+                <label
+                  for="groqKey"
+                  class="block text-[11px] font-medium text-gray-600 mb-1 ml-1"
+                  >Groq AI</label
+                >
+                <input
+                  type="password"
+                  id="groqKey"
+                  bind:value={settings.groqKey}
+                  onchange={() => settings.save()}
+                  placeholder="Enter Groq API Key"
+                  class="w-full px-4 h-9 rounded-lg border border-gray-200 focus:outline-none focus:border-primary text-sm bg-gray-50/50"
+                />
+              </div>
+
+              <!-- OpenRouter Key -->
+              <div>
+                <label
+                  for="openRouterKey"
+                  class="block text-[11px] font-medium text-gray-600 mb-1 ml-1"
+                  >OpenRouter</label
+                >
+                <input
+                  type="password"
+                  id="openRouterKey"
+                  bind:value={settings.openRouterKey}
+                  onchange={() => settings.save()}
+                  placeholder="Enter OpenRouter API Key"
+                  class="w-full px-4 h-9 rounded-lg border border-gray-200 focus:outline-none focus:border-primary text-sm bg-gray-50/50"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-4 bg-gray-50 rounded-xl border border-gray-100">
         <div class="flex items-center justify-between mb-4">
           <h3
             class="text-sm font-medium text-gray-500 uppercase tracking-wider"
@@ -436,30 +552,6 @@
             </div>
           </div>
         {/if}
-      </div>
-
-      <!-- General Settings -->
-      <div
-        class="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
-      >
-        <div class="flex flex-col">
-          <span class="font-medium text-gray-800">Auto-start Sidecar</span>
-          <span class="text-sm text-gray-500"
-            >Automatically start the WhatsApp service</span
-          >
-        </div>
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input
-            type="checkbox"
-            checked={settings.autoStart}
-            onchange={() => settings.toggleAutoStart()}
-            id="autostart"
-            class="sr-only peer"
-          />
-          <div
-            class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"
-          ></div>
-        </label>
       </div>
     </div>
   </div>

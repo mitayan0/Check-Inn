@@ -1,8 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
   import { getModules, type Module } from "./lib/modules/registry";
-  import { settings } from "./lib/stores/settings.svelte";
 
   // State for routing
   let activeModuleId = $state("dashboard");
@@ -13,23 +10,11 @@
     modules.find((m) => m.id === activeModuleId)?.component ||
       modules[0].component,
   );
-
-  onMount(async () => {
-    // Other init logic if needed
-  });
-
-  // Watch for settings change if user toggles it manually while running
-  $effect(() => {
-    if (settings.autoStart) {
-      console.log("Auto-start enabled, forcing sidecar start...");
-      invoke("start_sidecar").catch((e) =>
-        console.error("Effect start error:", e),
-      );
-    }
-  });
 </script>
 
-<div class="flex h-screen bg-surface text-[#1D1B20] overflow-hidden font-sans">
+<div
+  class="flex h-screen bg-surface text-[var(--text-color)] overflow-hidden font-sans"
+>
   <!-- Navigation Rail -->
   <nav class="w-20 bg-surface flex flex-col items-center py-4 gap-3 z-10">
     <div class="mb-4">

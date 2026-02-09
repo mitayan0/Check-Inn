@@ -32,6 +32,14 @@ fn main() {
                 .build(),
         )
         .setup(|app| {
+            // Auto-start sidecar immediately for instant WhatsApp connection
+            let app_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                if let Err(e) = commands::start_sidecar(app_handle) {
+                    eprintln!("Failed to auto-start sidecar: {}", e);
+                }
+            });
+
             let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let show_i = MenuItem::with_id(app, "show", "Show", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_i, &quit_i])?;

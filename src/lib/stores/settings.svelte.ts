@@ -11,6 +11,14 @@ export class SettingsStore {
     targetType = $state<'self' | 'group'>('self');
     targetGroup = $state<string | null>(null);
 
+    // LLM Settings
+    llmProvider = $state<'none' | 'gemini' | 'groq' | 'openrouter'>('none');
+    geminiKey = $state('');
+    groqKey = $state('');
+    openRouterKey = $state('');
+    llmModel = $state('gemini-2.5-flash'); // Default model
+    weeklyGoal = $state(40); // Default 40 hours/week
+
     // Message Templates
     checkInTemplate = $state('*Check In* {time}');
     checkOutTemplate = $state('*Check Out* {time}');
@@ -37,6 +45,15 @@ export class SettingsStore {
                 if (data.checkOutTemplate) this.checkOutTemplate = data.checkOutTemplate;
                 if (data.breakStartTemplate) this.breakStartTemplate = data.breakStartTemplate;
                 if (data.breakEndTemplate) this.breakEndTemplate = data.breakEndTemplate;
+
+                // Load LLM Settings
+                this.llmProvider = data.llmProvider ?? 'none';
+                this.geminiKey = data.geminiKey ?? '';
+                this.groqKey = data.groqKey ?? '';
+                this.openRouterKey = data.openRouterKey ?? '';
+                this.llmModel = data.llmModel ?? 'gemini-2.5-flash';
+                if (this.llmModel === 'gemini-1.5-flash') this.llmModel = 'gemini-2.5-flash';
+                this.weeklyGoal = data.weeklyGoal ?? 40;
             } catch (e) {
                 console.error('Failed to load settings', e);
             }
@@ -53,7 +70,13 @@ export class SettingsStore {
             checkInTemplate: this.checkInTemplate,
             checkOutTemplate: this.checkOutTemplate,
             breakStartTemplate: this.breakStartTemplate,
-            breakEndTemplate: this.breakEndTemplate
+            breakEndTemplate: this.breakEndTemplate,
+            llmProvider: this.llmProvider,
+            geminiKey: this.geminiKey,
+            groqKey: this.groqKey,
+            openRouterKey: this.openRouterKey,
+            llmModel: this.llmModel,
+            weeklyGoal: this.weeklyGoal
         }));
     }
 
@@ -79,6 +102,15 @@ export class SettingsStore {
 
     setTargetGroup(group: string) {
         this.targetGroup = group;
+        this.save();
+    }
+
+    setLlmProvider(provider: 'none' | 'gemini' | 'groq' | 'openrouter') {
+        this.llmProvider = provider;
+        // Automatically set sensible default models
+        if (provider === 'gemini') this.llmModel = 'gemini-2.5-flash';
+        else if (provider === 'groq') this.llmModel = 'llama-3.3-70b-versatile';
+        else if (provider === 'openrouter') this.llmModel = 'google/gemini-2.5-flash';
         this.save();
     }
 }
