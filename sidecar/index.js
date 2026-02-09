@@ -278,6 +278,9 @@ async function callLLM(tasks, provider, apiKey, model) {
         });
         const data = await response.json();
         if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+        if (!data.candidates || !data.candidates[0]?.content?.parts?.[0]?.text) {
+            throw new Error('Invalid response structure from Gemini API');
+        }
         return data.candidates[0].content.parts[0].text;
     }
 
@@ -300,6 +303,9 @@ async function callLLM(tasks, provider, apiKey, model) {
         });
         const data = await response.json();
         if (data.error) throw new Error(data.error.message || data.error);
+        if (!data.choices || !data.choices[0]?.message?.content) {
+            throw new Error('Invalid response structure from API');
+        }
         return data.choices[0].message.content;
     }
 
@@ -321,66 +327,74 @@ function isStaleSessionError(err) {
         message.includes('Protocol error');
 }
 
+let reinitPromise = null; // Promise-based lock for reinitializeClient
+
 // Reinitialize the WhatsApp client when the browser session becomes stale
 async function reinitializeClient() {
-    if (isReinitializing) {
-        log('Reinitialize already in progress, skipping...');
-        return;
+    // Use promise-based lock to prevent race conditions
+    if (reinitPromise) {
+        log('Reinitialize already in progress, waiting for existing...');
+        return reinitPromise;
     }
 
-    isReinitializing = true;
-    log('Reinitializing WhatsApp client due to stale session...');
-    broadcast({ type: 'RECONNECTING' });
+    reinitPromise = (async () => {
+        isReinitializing = true;
+        log('Reinitializing WhatsApp client due to stale session...');
+        broadcast({ type: 'RECONNECTING' });
 
-    try {
-        let browserPid = null;
+        try {
+            let browserPid = null;
 
-        if (client) {
-            // Try to get the browser PID before destroying
-            try {
-                if (client.pupBrowser && client.pupBrowser.process()) {
-                    browserPid = client.pupBrowser.process().pid;
-                    log('Browser PID captured for reinit:', browserPid);
+            if (client) {
+                // Try to get the browser PID before destroying
+                try {
+                    if (client.pupBrowser && client.pupBrowser.process()) {
+                        browserPid = client.pupBrowser.process().pid;
+                        log('Browser PID captured for reinit:', browserPid);
+                    }
+                } catch (e) {
+                    log('Could not capture browser PID:', e.message);
                 }
-            } catch (e) {
-                log('Could not capture browser PID:', e.message);
+
+                try {
+                    const destroyPromise = client.destroy();
+                    const destroyTimeout = new Promise(resolve => setTimeout(resolve, 5000));
+                    await Promise.race([destroyPromise, destroyTimeout]);
+                } catch (e) {
+                    logError('Error destroying stale client:', e.message);
+                }
+                client = null;
+            }
+            isReady = false;
+            lastQR = null;
+
+            // Force kill the browser process if it's still running
+            if (browserPid) {
+                try {
+                    log('Force killing stale browser process:', browserPid);
+                    process.kill(browserPid, 'SIGKILL');
+                } catch (e) {
+                    log('Browser process already terminated:', e.message);
+                }
             }
 
-            try {
-                const destroyPromise = client.destroy();
-                const destroyTimeout = new Promise(resolve => setTimeout(resolve, 5000));
-                await Promise.race([destroyPromise, destroyTimeout]);
-            } catch (e) {
-                logError('Error destroying stale client:', e.message);
+            // Wait a moment before reinitializing
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // Initialize with the first connected WebSocket client
+            const wsClient = [...wss.clients].find(c => c.readyState === WebSocket.OPEN);
+            if (wsClient) {
+                initWhatsApp(wsClient);
+            } else {
+                log('No connected WebSocket clients to reinitialize with');
             }
-            client = null;
+        } finally {
+            isReinitializing = false;
+            reinitPromise = null;
         }
-        isReady = false;
-        lastQR = null;
+    })();
 
-        // Force kill the browser process if it's still running
-        if (browserPid) {
-            try {
-                log('Force killing stale browser process:', browserPid);
-                process.kill(browserPid, 'SIGKILL');
-            } catch (e) {
-                log('Browser process already terminated:', e.message);
-            }
-        }
-
-        // Wait a moment before reinitializing
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // Initialize with the first connected WebSocket client
-        const wsClient = [...wss.clients].find(c => c.readyState === WebSocket.OPEN);
-        if (wsClient) {
-            initWhatsApp(wsClient);
-        } else {
-            log('No connected WebSocket clients to reinitialize with');
-        }
-    } finally {
-        isReinitializing = false;
-    }
+    return reinitPromise;
 }
 
 function initWhatsApp(ws) {
@@ -628,7 +642,7 @@ async function findGroupIdByName(targetName) {
             );
             const chats = await Promise.race([client.getChats(), timeoutPromise]);
             const group = chats.find(chat => chat.isGroup && (chat.name === targetName || chat.formattedTitle === targetName));
-            if (group) return group.id._serialized;
+            if (group && group.id && group.id._serialized) return group.id._serialized;
         } catch (err) {
             logError(`findGroupIdByName: Primary lookup failed (${err.message}). Trying deep lookup...`);
         }
@@ -641,7 +655,7 @@ async function findGroupIdByName(targetName) {
                 (c.isGroup || (c.id && c.id._serialized && c.id._serialized.endsWith('@g.us'))) &&
                 (c.name === targetName || c.formattedTitle === targetName)
             );
-            return group ? group.id._serialized : null;
+            return (group && group.id && group.id._serialized) ? group.id._serialized : null;
         }, targetName);
 
         if (groupId) return groupId;
@@ -653,7 +667,7 @@ async function findGroupIdByName(targetName) {
 }
 
 async function sendMessage(payload, ws) {
-    if (!client) return;
+    if (!client || !isReady) return;
     const { targetType, target, message } = payload;
 
     try {
@@ -701,8 +715,8 @@ async function sendMessage(payload, ws) {
  * Uses the messageTimestamp as the base date.
  */
 function parseTimeOverride(body, messageTimestamp) {
-    // Regex for "1:20am", "1.20 pm", "13:00", etc.
-    const timeRegex = /\b((?:0?[1-9]|1[0-2])|(?:[0-1]?[0-9]|2[0-3]))[:.]?([0-5][0-9])\s*([aApP][mM])?\b/;
+    // Regex for "1:20am", "1.20 pm", "13:00", etc. Requires delimiter between hours and minutes.
+    const timeRegex = /\b(0?[1-9]|1[0-2]|1[3-9]|2[0-3])[:.]([ 0-5][0-9])\s*([aApP][mM])?\b/;
     const match = body.match(timeRegex);
 
     if (!match) return null;
@@ -730,9 +744,6 @@ function parseTimeOverride(body, messageTimestamp) {
     return overriddenDate;
 }
 
-function formatDuration(hours, minutes) {
-    return `${hours}h ${minutes}m`;
-}
 
 /**
  * Fetch messages from a group and analyze work hours
@@ -744,7 +755,7 @@ function formatDuration(hours, minutes) {
 /**
  * Core Algorithm: State Machine for Work Hours Analysis
  */
-async function fetchAndAnalyzeMessages(groupId, fromDateStr, toDateStr, userNameFilter = null) {
+async function fetchAndAnalyzeMessages(groupId, fromDateStr, toDateStr) {
     const fromDate = new Date(fromDateStr);
     fromDate.setHours(0, 0, 0, 0);
 
@@ -1020,7 +1031,9 @@ async function fetchAndAnalyzeMessages(groupId, fromDateStr, toDateStr, userName
         return {
             date: day.date,
             checkInTime: formatCompactTime(sortedSessions[0].start),
-            checkOutTime: formatCompactTime(sortedSessions[sortedSessions.length - 1].end),
+            checkOutTime: sortedSessions[sortedSessions.length - 1].end
+                ? formatCompactTime(sortedSessions[sortedSessions.length - 1].end)
+                : 'Ongoing',
             duration: Math.round(day.totalMinutes),
             durationFormatted: `${totalHours}h ${totalMins}m`,
             yesterdayWork: [],
