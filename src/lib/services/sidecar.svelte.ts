@@ -103,7 +103,8 @@ class SidecarService {
             }
 
             // Sidecar is auto-started from Rust backend, just connect to WebSocket
-            this.ws = new WebSocket('ws://localhost:3005'); // Note: This port might need to be dynamic or configurable.
+            const port = import.meta.env.DEV ? 3006 : 3005;
+            this.ws = new WebSocket(`ws://localhost:${port}`);
 
             this.ws.onopen = () => {
                 console.log('Connected to Sidecar');

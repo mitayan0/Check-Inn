@@ -2,6 +2,26 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
+const { exec, execSync } = require('child_process');
+
+// Parse command line arguments
+const args = process.argv.slice(2);
+let argPort = 3005;
+let argSessionDirName = '.wwebjs_auth';
+
+for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--port' && args[i + 1]) {
+        argPort = parseInt(args[i + 1]);
+        i++;
+    } else if (args[i] === '--session-dir' && args[i + 1]) {
+        argSessionDirName = args[i + 1];
+        i++;
+    }
+}
+
+// Check for legacy process.env overrides (optional, but good for safety)
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : argPort;
+const SESSION_DIR_NAME = process.env.SESSION_DIR_NAME || argSessionDirName;
 
 // Load environment variables
 try {
@@ -10,8 +30,10 @@ try {
     // Dotenv might not be installed or .env missing
 }
 
-// Setup file logging
-const LOG_FILE = path.join(process.env.APPDATA || process.env.HOME || '.', 'check-inn-sidecar.log');
+// Setup file logging - Use a unique log file for dev if needed, or share?
+// Let's share for now but maybe prefix log lines? Or just keep it simple.
+const LOG_FILE = path.join(process.env.APPDATA || process.env.HOME || '.', `check-inn-sidecar-${PORT}.log`);
+
 function log(msg, ...args) {
     const timestamp = new Date().toISOString();
     const formatted = args.length ? `${msg} ${JSON.stringify(args)}` : msg;
@@ -45,13 +67,55 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Constants
-const PORT = 3005; // Internal port for IPC
-const SESSION_DIR = path.join(process.env.APPDATA || '.', '.wwebjs_auth');
+const SESSION_DIR = path.join(process.env.APPDATA || '.', SESSION_DIR_NAME);
 const HARDCODED_GEMINI_KEY = process.env.GEMINI_API_KEY;
 
-log('Starting sidecar...');
-log('Log file:', LOG_FILE);
-log('Session dir:', SESSION_DIR);
+log(`Starting sidecar...`);
+log(`Port: ${PORT}`);
+log(`Session Dir Name: ${SESSION_DIR_NAME}`);
+log(`Log file: ${LOG_FILE}`);
+log(`Session full path: ${SESSION_DIR}`);
+
+/**
+ * CLEANUP STALE PROCESSES
+ * Kills any chrome/node processes that are strictly related to THIS session directory.
+ */
+function cleanupStaleProcesses() {
+    log('Running proactive process cleanup...');
+    
+    // 1. Kill orphaned Chrome instances using this specific session directory
+    if (process.platform === 'win32') {
+        try {
+            // WMIC to find processes with command line containing the session dir name
+            // SEARCH_TERM needs to be unique enough. The session dir name (e.g., .wwebjs_auth_dev) is perfect.
+            const searchTerm = SESSION_DIR_NAME; // e.g. ".wwebjs_auth" or ".wwebjs_auth_dev"
+            
+            // We look for chrome.exe with this specific user data dir
+            const findCmd = `wmic process where "name='chrome.exe' and commandline like '%${searchTerm}%'" get processid`;
+            
+            log(`Searching for stale Chrome processes with term: "${searchTerm}"`);
+            const stdout = execSync(findCmd, { encoding: 'utf8' });
+            
+            const pids = stdout.split(/\r?\n/)
+                .map(l => l.trim())
+                .filter(l => /^\d+$/.test(l));
+
+            if (pids.length > 0) {
+                log(`Found ${pids.length} stale Chrome process(es) to kill: ${pids.join(', ')}`);
+                execSync(`taskkill /F ${pids.map(p => `/PID ${p}`).join(' ')}`, { stdio: 'ignore' });
+                log('Stale Chrome processes killed.');
+            } else {
+                log('No stale Chrome processes found.');
+            }
+        } catch (e) {
+            log('Cleanup warning (Chrome): ' + e.message);
+        }
+    }
+}
+
+// RUN CLEANUP BEFORE STARTING ANYTHING
+cleanupStaleProcesses();
+
 
 // Initialize WebSocket Server
 const wss = new WebSocket.Server({ port: PORT });

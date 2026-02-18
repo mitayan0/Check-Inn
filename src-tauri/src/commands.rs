@@ -159,9 +159,22 @@ pub fn start_sidecar(app: tauri::AppHandle) -> Result<String, String> {
     // Note: Logging inside thread will need to reopen or share handle carefully.
     // For simplicity, reopen in append mode inside thread.
 
+    let port = if cfg!(debug_assertions) {
+        "3006"
+    } else {
+        "3005"
+    };
+    let session_dir = if cfg!(debug_assertions) {
+        ".wwebjs_auth_dev"
+    } else {
+        ".wwebjs_auth"
+    };
+
     let log_path_clone = log_path.clone();
     let script_path_clone = script_path.clone();
     let node_path_clone = node_path.clone();
+    let port_clone = port.to_string();
+    let session_dir_clone = session_dir.to_string();
 
     std::thread::spawn(move || {
         let mut f_thread = std::fs::OpenOptions::new()
@@ -189,7 +202,12 @@ pub fn start_sidecar(app: tauri::AppHandle) -> Result<String, String> {
             // Handle long paths explicitly if needed, but usually strictly canonical paths work.
             // If path starts with \\?\, node might handle it.
 
-            cmd.arg(&script_path_clone).creation_flags(CREATE_NO_WINDOW);
+            cmd.arg(&script_path_clone)
+                .arg("--port")
+                .arg(&port_clone)
+                .arg("--session-dir")
+                .arg(&session_dir_clone)
+                .creation_flags(CREATE_NO_WINDOW);
 
             if let Some(f) = stdout_file {
                 cmd.stdout(f);
@@ -204,7 +222,11 @@ pub fn start_sidecar(app: tauri::AppHandle) -> Result<String, String> {
         #[cfg(not(target_os = "windows"))]
         {
             let mut cmd = std::process::Command::new(&node_path_clone);
-            cmd.arg(&script_path_clone);
+            cmd.arg(&script_path_clone)
+                .arg("--port")
+                .arg(&port_clone)
+                .arg("--session-dir")
+                .arg(&session_dir_clone);
 
             if let Some(f) = stdout_file {
                 cmd.stdout(f);
