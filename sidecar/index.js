@@ -45,7 +45,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Constants
-const PORT = 3002; // Internal port for IPC
+const PORT = 3005; // Internal port for IPC
 const SESSION_DIR = path.join(process.env.APPDATA || '.', '.wwebjs_auth');
 const HARDCODED_GEMINI_KEY = process.env.GEMINI_API_KEY;
 
@@ -481,17 +481,30 @@ function initWhatsApp(ws) {
                 log('Detected stuck browser process. Attempting cleanup and retry...');
                 try {
                     const { execSync } = require('child_process');
+                    // TARGETED KILL: Only kill chrome processes that are using our specific session folder
+                    // This prevents killing the user's personal Chrome tabs.
                     if (process.platform === 'win32') {
-                        execSync('taskkill /F /IM chrome.exe /FI "WINDOWTITLE eq about:blank" 2>nul', { stdio: 'ignore' });
+                        try {
+                            const findCmd = `wmic process where "name='chrome.exe' and commandline like '%wwebjs_auth%'" get processid`;
+                            const stdout = execSync(findCmd, { encoding: 'utf8' });
+                            const pids = stdout.split(/\r?\n/).map(l => l.trim()).filter(l => /^\d+$/.test(l));
+
+                            if (pids.length > 0) {
+                                log(`Killing ${pids.length} stuck Chrome processes: ${pids.join(', ')}`);
+                                execSync(`taskkill /F ${pids.map(p => `/PID ${p}`).join(' ')}`, { stdio: 'ignore' });
+                            } else {
+                                log('No matching Chrome processes found to kill.');
+                            }
+                        } catch (killErr) {
+                            log('Error during targeted cleanup: ' + killErr.message);
+                            // Fallback to previous logic if targeted kill fails, or maybe just log it?
+                            // Safe to not fallback to global kill to respect user's request.
+                        }
                     }
+
                     // Wait a bit
                     await new Promise(resolve => setTimeout(resolve, 2000));
-                    // Retry initialization once
-                    // We need to re-create the client or just re-call initialize? 
-                    // Usually initialize() can't be called twice on same instance if failed partially?
-                    // Safer to destroy and restart? 
-                    // But here we are inside initWhatsApp.
-                    // Valid retry strategy:
+                    // Retry initialization
                     if (client) {
                         client.destroy().catch(() => { });
                         client = null;
